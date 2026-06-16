@@ -17,9 +17,20 @@ def _get_or_404(socio_id: int, db: Session) -> Socio:
 
 
 @router.get("/", response_model=list[SocioResponse], summary="Listar socios")
-def list_socios(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Retorna la lista paginada de socios."""
-    return db.query(Socio).offset(skip).limit(limit).all()
+def list_socios(
+    skip: int = 0,
+    limit: int = 100,
+    dni: str | None = None,
+    name: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Retorna la lista paginada de socios. Filtra por `dni` (exacto) y/o `name` (parcial, sin distinción de mayúsculas)."""
+    q = db.query(Socio)
+    if dni is not None:
+        q = q.filter(Socio.dni == dni)
+    if name is not None:
+        q = q.filter(Socio.nombre_apellido.ilike(f"%{name}%"))
+    return q.offset(skip).limit(limit).all()
 
 
 @router.post("/", response_model=SocioResponse, status_code=status.HTTP_201_CREATED, summary="Crear socio")
