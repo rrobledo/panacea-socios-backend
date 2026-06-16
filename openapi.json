@@ -1,0 +1,1387 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Panacea Socios API",
+    "description": "API para gesti\u00f3n de socios, sus preferencias y registro de ventas de Panacea. Permite registrar clientes, capturar sus respuestas a preguntas clave y llevar un historial de compras para futuras promociones y regalos.",
+    "contact": {
+      "name": "Panacea",
+      "email": "info@panacea.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/socios/": {
+      "get": {
+        "tags": [
+          "Socios"
+        ],
+        "summary": "Listar socios",
+        "description": "Retorna la lista paginada de socios. Filtra por `dni` (exacto) y/o `name` (parcial, sin distinci\u00f3n de may\u00fasculas).",
+        "operationId": "list_socios_socios__get",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "dni",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dni"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SocioResponse"
+                  },
+                  "title": "Response List Socios Socios  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Socios"
+        ],
+        "summary": "Crear socio",
+        "description": "Crea un nuevo socio. DNI y email deben ser \u00fanicos.",
+        "operationId": "create_socio_socios__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocioCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocioResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/socios/{socio_id}": {
+      "get": {
+        "tags": [
+          "Socios"
+        ],
+        "summary": "Obtener socio",
+        "description": "Retorna los datos de un socio por su ID.",
+        "operationId": "get_socio_socios__socio_id__get",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocioResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Socios"
+        ],
+        "summary": "Actualizar socio",
+        "description": "Actualiza parcialmente los datos de un socio.",
+        "operationId": "update_socio_socios__socio_id__put",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocioUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocioResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Socios"
+        ],
+        "summary": "Eliminar socio",
+        "description": "Elimina un socio y sus preguntas asociadas.",
+        "operationId": "delete_socio_socios__socio_id__delete",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/socios/{socio_id}/preguntas/": {
+      "get": {
+        "tags": [
+          "Preguntas por Socio"
+        ],
+        "summary": "Listar preferencias del socio",
+        "description": "Retorna todas las preferencias registradas para un socio.",
+        "operationId": "list_preguntas_socios__socio_id__preguntas__get",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PreguntaResponse"
+                  },
+                  "title": "Response List Preguntas Socios  Socio Id  Preguntas  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Preguntas por Socio"
+        ],
+        "summary": "Agregar o actualizar preferencia",
+        "description": "Crea o actualiza una preferencia (clave \u00fanica por socio).",
+        "operationId": "upsert_pregunta_socios__socio_id__preguntas__post",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreguntaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreguntaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/socios/{socio_id}/preguntas/{clave}": {
+      "get": {
+        "tags": [
+          "Preguntas por Socio"
+        ],
+        "summary": "Obtener una preferencia por clave",
+        "description": "Retorna la respuesta a una clave espec\u00edfica para un socio.",
+        "operationId": "get_pregunta_socios__socio_id__preguntas__clave__get",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          },
+          {
+            "name": "clave",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ClavePregunta"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreguntaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Preguntas por Socio"
+        ],
+        "summary": "Actualizar una preferencia",
+        "description": "Actualiza el valor de una preferencia existente.",
+        "operationId": "update_pregunta_socios__socio_id__preguntas__clave__put",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          },
+          {
+            "name": "clave",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ClavePregunta"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreguntaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreguntaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Preguntas por Socio"
+        ],
+        "summary": "Eliminar una preferencia",
+        "description": "Elimina la respuesta a una clave espec\u00edfica para un socio.",
+        "operationId": "delete_pregunta_socios__socio_id__preguntas__clave__delete",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Socio Id"
+            }
+          },
+          {
+            "name": "clave",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ClavePregunta"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ventas/": {
+      "get": {
+        "tags": [
+          "Registro de Ventas"
+        ],
+        "summary": "Listar ventas",
+        "description": "Retorna ventas con sus detalles. Filtrable por socio_id.",
+        "operationId": "list_ventas_ventas__get",
+        "parameters": [
+          {
+            "name": "socio_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Socio Id"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VentaResponse"
+                  },
+                  "title": "Response List Ventas Ventas  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Registro de Ventas"
+        ],
+        "summary": "Registrar venta",
+        "description": "Crea un registro de venta con sus l\u00edneas de detalle.",
+        "operationId": "create_venta_ventas__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VentaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VentaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ventas/{venta_id}": {
+      "get": {
+        "tags": [
+          "Registro de Ventas"
+        ],
+        "summary": "Obtener venta",
+        "description": "Retorna una venta con sus detalles por ID.",
+        "operationId": "get_venta_ventas__venta_id__get",
+        "parameters": [
+          {
+            "name": "venta_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Venta Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VentaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Registro de Ventas"
+        ],
+        "summary": "Actualizar cabecera de venta",
+        "description": "Actualiza los campos de cabecera de una venta (no los detalles).",
+        "operationId": "update_venta_ventas__venta_id__put",
+        "parameters": [
+          {
+            "name": "venta_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Venta Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VentaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VentaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Registro de Ventas"
+        ],
+        "summary": "Eliminar venta",
+        "description": "Elimina una venta y todos sus detalles (cascade).",
+        "operationId": "delete_venta_ventas__venta_id__delete",
+        "parameters": [
+          {
+            "name": "venta_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Venta Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "description": "Verifica que el servicio est\u00e1 en l\u00ednea.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ClavePregunta": {
+        "type": "string",
+        "enum": [
+          "que_producto_te_gustaria_que_sumemos",
+          "que_parte_de_panacea_es_tu_favorita",
+          "de_donde_son"
+        ],
+        "title": "ClavePregunta"
+      },
+      "DetalleCreate": {
+        "properties": {
+          "producto_id": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Producto Id",
+            "examples": [
+              "CERVEZA-IPA-500ML"
+            ]
+          },
+          "cantidad": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cantidad",
+            "examples": [
+              2
+            ]
+          },
+          "subtotal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Subtotal",
+            "examples": [
+              [
+                "350.00"
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "producto_id",
+          "cantidad",
+          "subtotal"
+        ],
+        "title": "DetalleCreate"
+      },
+      "DetalleResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "registro_venta_id": {
+            "type": "integer",
+            "title": "Registro Venta Id"
+          },
+          "producto_id": {
+            "type": "string",
+            "title": "Producto Id"
+          },
+          "cantidad": {
+            "type": "integer",
+            "title": "Cantidad"
+          },
+          "subtotal": {
+            "type": "string",
+            "title": "Subtotal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "registro_venta_id",
+          "producto_id",
+          "cantidad",
+          "subtotal"
+        ],
+        "title": "DetalleResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PreguntaCreate": {
+        "properties": {
+          "clave": {
+            "$ref": "#/components/schemas/ClavePregunta",
+            "examples": [
+              "que_producto_te_gustaria_que_sumemos"
+            ]
+          },
+          "valor": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Valor",
+            "examples": [
+              "Cervezas artesanales"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "clave",
+          "valor"
+        ],
+        "title": "PreguntaCreate"
+      },
+      "PreguntaResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "socio_id": {
+            "type": "integer",
+            "title": "Socio Id"
+          },
+          "clave": {
+            "$ref": "#/components/schemas/ClavePregunta"
+          },
+          "valor": {
+            "type": "string",
+            "title": "Valor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "socio_id",
+          "clave",
+          "valor"
+        ],
+        "title": "PreguntaResponse"
+      },
+      "PreguntaUpdate": {
+        "properties": {
+          "valor": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Valor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor"
+        ],
+        "title": "PreguntaUpdate"
+      },
+      "SocioCreate": {
+        "properties": {
+          "nombre_apellido": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Nombre Apellido",
+            "examples": [
+              "Juan P\u00e9rez"
+            ]
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono",
+            "examples": [
+              "+54 9 11 1234-5678"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "examples": [
+              "juan@example.com"
+            ]
+          },
+          "fecha_nacimiento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Nacimiento",
+            "examples": [
+              "1990-05-15"
+            ]
+          },
+          "dni": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Dni",
+            "examples": [
+              "30123456"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre_apellido",
+          "email",
+          "dni"
+        ],
+        "title": "SocioCreate"
+      },
+      "SocioResponse": {
+        "properties": {
+          "nombre_apellido": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Nombre Apellido",
+            "examples": [
+              "Juan P\u00e9rez"
+            ]
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono",
+            "examples": [
+              "+54 9 11 1234-5678"
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "fecha_nacimiento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Nacimiento",
+            "examples": [
+              "1990-05-15"
+            ]
+          },
+          "dni": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Dni",
+            "examples": [
+              "30123456"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre_apellido",
+          "dni",
+          "id"
+        ],
+        "title": "SocioResponse"
+      },
+      "SocioUpdate": {
+        "properties": {
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "fecha_nacimiento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Nacimiento"
+          },
+          "dni": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dni"
+          }
+        },
+        "type": "object",
+        "title": "SocioUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VentaCreate": {
+        "properties": {
+          "socio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Socio Id",
+            "examples": [
+              1
+            ]
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date",
+            "title": "Fecha",
+            "examples": [
+              "2024-06-15"
+            ]
+          },
+          "lugar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lugar",
+            "examples": [
+              "Local Palermo"
+            ]
+          },
+          "importe": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Importe",
+            "examples": [
+              [
+                "700.00"
+              ]
+            ]
+          },
+          "detalles": {
+            "items": {
+              "$ref": "#/components/schemas/DetalleCreate"
+            },
+            "type": "array",
+            "title": "Detalles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fecha",
+          "importe"
+        ],
+        "title": "VentaCreate"
+      },
+      "VentaResponse": {
+        "properties": {
+          "socio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Socio Id",
+            "examples": [
+              1
+            ]
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date",
+            "title": "Fecha",
+            "examples": [
+              "2024-06-15"
+            ]
+          },
+          "lugar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lugar",
+            "examples": [
+              "Local Palermo"
+            ]
+          },
+          "importe": {
+            "type": "string",
+            "title": "Importe",
+            "examples": [
+              [
+                "700.00"
+              ]
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "detalles": {
+            "items": {
+              "$ref": "#/components/schemas/DetalleResponse"
+            },
+            "type": "array",
+            "title": "Detalles",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "fecha",
+          "importe",
+          "id"
+        ],
+        "title": "VentaResponse"
+      },
+      "VentaUpdate": {
+        "properties": {
+          "socio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Socio Id"
+          },
+          "fecha": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha"
+          },
+          "lugar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lugar"
+          },
+          "importe": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importe"
+          }
+        },
+        "type": "object",
+        "title": "VentaUpdate"
+      }
+    }
+  }
+}
