@@ -25,5 +25,6 @@ class SocioUpdate(BaseModel):
 
 class SocioResponse(SocioBase):
     id: int
+    email: str | None = None  # stored value may be invalid; validate only on write
 
     model_config = {"from_attributes": True}
