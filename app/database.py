@@ -4,8 +4,10 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from app.config import settings
 
 # NullPool avoids persistent connections in serverless environments (Vercel)
+db_url = settings.database_url.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(
-    settings.database_url,
+    db_url,
     pool_pre_ping=True,
     pool_size=1,
     max_overflow=0,

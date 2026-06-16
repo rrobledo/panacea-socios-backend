@@ -1,9 +1,9 @@
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.config import settings
 from app.database import Base
 import app.models  # noqa: F401 — registers all models with Base.metadata
 
@@ -12,10 +12,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override sqlalchemy.url from environment variable
-database_url = os.environ.get("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+database_url = settings.database_url.replace("postgres://", "postgresql://", 1)
+config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
 
