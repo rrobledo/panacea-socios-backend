@@ -102,6 +102,22 @@ uvicorn app.main:app --reload
 | PUT | `/socios/{id}` | Actualizar socio |
 | DELETE | `/socios/{id}` | Eliminar socio |
 
+#### Parámetros de consulta — `GET /socios/`
+
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `skip` | int | Registros a omitir (paginación, default `0`) |
+| `limit` | int | Máximo de registros a retornar (default `100`) |
+| `dni` | string | Filtra por DNI exacto |
+| `name` | string | Filtra por nombre (parcial, sin distinción de mayúsculas) |
+
+Ejemplos:
+```
+GET /socios/?dni=12345678
+GET /socios/?name=garcia
+GET /socios/?name=garcia&skip=0&limit=20
+```
+
 ### Preguntas por socio (`/socios/{id}/preguntas`)
 
 Claves válidas:
