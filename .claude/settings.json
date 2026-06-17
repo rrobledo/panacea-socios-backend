@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // empty'); echo \"$FILE\" | grep -qE 'app/(routers|schemas|models|main)(\\.py$|/.*\\.py$)' && source .venv/bin/activate && python -c \"import json; from app.main import app; print(json.dumps(app.openapi(), indent=2))\" > openapi.json || true",
+            "statusMessage": "Regenerating openapi.json..."
+          }
+        ]
+      }
+    ]
+  }
+}
