@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SocioBase(BaseModel):
@@ -9,6 +9,15 @@ class SocioBase(BaseModel):
     email: str | None = Field(None, examples=["juan@example.com"])
     fecha_nacimiento: date | None = Field(None, examples=["1990-05-15"])
     dni: str = Field(..., max_length=20, examples=["30123456"])
+
+    @field_validator("fecha_nacimiento", mode="before")
+    @classmethod
+    def parse_fecha_nacimiento(cls, v):
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, str) and "T" in v:
+            return datetime.fromisoformat(v.replace("Z", "+00:00")).date()
+        return v
 
 
 class SocioCreate(SocioBase):
