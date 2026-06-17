@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -29,7 +30,8 @@ def list_socios(
     if dni is not None:
         q = q.filter(Socio.dni == dni)
     if name is not None:
-        q = q.filter(Socio.nombre_apellido.ilike(f"%{name}%"))
+        pattern = func.concat('%', func.unaccent(name), '%')
+        q = q.filter(func.unaccent(Socio.nombre_apellido).ilike(pattern))
     return q.offset(skip).limit(limit).all()
 
 
