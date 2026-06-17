@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -12,7 +12,7 @@ class RegistroVenta(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     socio_id: Mapped[int | None] = mapped_column(ForeignKey("socios.id", ondelete="SET NULL"), index=True)
-    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    fecha: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     lugar: Mapped[str | None] = mapped_column(String(200))
     importe: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
