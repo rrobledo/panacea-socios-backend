@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
@@ -43,3 +43,20 @@ class VentaResponse(VentaBase):
     detalles: list[DetalleResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class VentaDetailResponse(BaseModel):
+    categoria: str | None
+    producto: str | None
+    subtotal: Decimal | None
+    cantidad: Decimal | None
+
+
+class ComprasSemanalResponse(BaseModel):
+    fecha: date
+    total: Decimal
+
+
+class ComprasPorCategoriaResponse(BaseModel):
+    name: str | None
+    value: int | None

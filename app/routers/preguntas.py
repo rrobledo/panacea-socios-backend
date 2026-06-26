@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.auth import passport
 from app.database import get_db
 from app.models.pregunta import ClavePregunta, PreguntaPorSocio
 from app.models.socio import Socio
@@ -17,15 +18,24 @@ def _get_socio_or_404(socio_id: int, db: Session) -> Socio:
 
 
 @router.get("/", response_model=list[PreguntaResponse], summary="Listar preferencias del socio")
-def list_preguntas(socio_id: int, db: Session = Depends(get_db)):
-    """Retorna todas las preferencias registradas para un socio."""
+def list_preguntas(
+    socio_id: int,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Retorna todas las preferencias registradas para un socio. Requiere autenticación."""
     _get_socio_or_404(socio_id, db)
     return db.query(PreguntaPorSocio).filter(PreguntaPorSocio.socio_id == socio_id).all()
 
 
 @router.post("/", response_model=PreguntaResponse, status_code=status.HTTP_201_CREATED, summary="Agregar o actualizar preferencia")
-def upsert_pregunta(socio_id: int, body: PreguntaCreate, db: Session = Depends(get_db)):
-    """Crea o actualiza una preferencia (clave única por socio)."""
+def upsert_pregunta(
+    socio_id: int,
+    body: PreguntaCreate,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Crea o actualiza una preferencia (clave única por socio). Requiere autenticación."""
     _get_socio_or_404(socio_id, db)
     existing = (
         db.query(PreguntaPorSocio)
@@ -46,8 +56,13 @@ def upsert_pregunta(socio_id: int, body: PreguntaCreate, db: Session = Depends(g
 
 
 @router.get("/{clave}", response_model=PreguntaResponse, summary="Obtener una preferencia por clave")
-def get_pregunta(socio_id: int, clave: ClavePregunta, db: Session = Depends(get_db)):
-    """Retorna la respuesta a una clave específica para un socio."""
+def get_pregunta(
+    socio_id: int,
+    clave: ClavePregunta,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Retorna la respuesta a una clave específica para un socio. Requiere autenticación."""
     _get_socio_or_404(socio_id, db)
     pregunta = (
         db.query(PreguntaPorSocio)
@@ -60,8 +75,14 @@ def get_pregunta(socio_id: int, clave: ClavePregunta, db: Session = Depends(get_
 
 
 @router.put("/{clave}", response_model=PreguntaResponse, summary="Actualizar una preferencia")
-def update_pregunta(socio_id: int, clave: ClavePregunta, body: PreguntaUpdate, db: Session = Depends(get_db)):
-    """Actualiza el valor de una preferencia existente."""
+def update_pregunta(
+    socio_id: int,
+    clave: ClavePregunta,
+    body: PreguntaUpdate,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Actualiza el valor de una preferencia existente. Requiere autenticación."""
     _get_socio_or_404(socio_id, db)
     pregunta = (
         db.query(PreguntaPorSocio)
@@ -77,8 +98,13 @@ def update_pregunta(socio_id: int, clave: ClavePregunta, body: PreguntaUpdate, d
 
 
 @router.delete("/{clave}", status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar una preferencia")
-def delete_pregunta(socio_id: int, clave: ClavePregunta, db: Session = Depends(get_db)):
-    """Elimina la respuesta a una clave específica para un socio."""
+def delete_pregunta(
+    socio_id: int,
+    clave: ClavePregunta,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Elimina la respuesta a una clave específica para un socio. Requiere autenticación."""
     _get_socio_or_404(socio_id, db)
     pregunta = (
         db.query(PreguntaPorSocio)

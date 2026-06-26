@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth.router import router as auth_router
 from app.routers import preguntas, socios, ventas
 
 app = FastAPI(
@@ -10,7 +11,7 @@ app = FastAPI(
         "Permite registrar clientes, capturar sus respuestas a preguntas clave y "
         "llevar un historial de compras para futuras promociones y regalos."
     ),
-    version="1.0.0",
+    version="2.0.0",
     contact={"name": "Panacea", "email": "info@panacea.com"},
     license_info={"name": "Proprietary"},
 )
@@ -22,6 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(socios.router)
 app.include_router(preguntas.router)
 app.include_router(ventas.router)

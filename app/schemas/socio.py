@@ -30,6 +30,7 @@ class SocioUpdate(BaseModel):
     email: str | None = None
     fecha_nacimiento: date | None = None
     dni: str | None = Field(None, max_length=20)
+    password: str | None = Field(None, min_length=8, examples=["s3cr3tPass!"])
 
 
 class SocioResponse(SocioBase):

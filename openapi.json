@@ -10,17 +10,227 @@
     "license": {
       "name": "Proprietary"
     },
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a new socio with email + password",
+        "operationId": "register_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/token": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login with email + password (OAuth2 password grant)",
+        "operationId": "login_local_auth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_local_auth_token_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/google": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login with Google ID token",
+        "operationId": "login_google_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleCredentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/facebook": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login with Facebook access token",
+        "operationId": "login_facebook_auth_facebook_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FacebookCredentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/apple": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login with Apple identity token",
+        "operationId": "login_apple_auth_apple_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleCredentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/socios/": {
       "get": {
         "tags": [
           "Socios"
         ],
         "summary": "Listar socios",
-        "description": "Retorna la lista paginada de socios. Filtra por `dni` (exacto) y/o `name` (parcial, sin distinci\u00f3n de may\u00fasculas).",
+        "description": "Retorna la lista paginada de socios. Requiere admin.",
         "operationId": "list_socios_socios__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "skip",
@@ -107,8 +317,13 @@
           "Socios"
         ],
         "summary": "Crear socio",
-        "description": "Crea un nuevo socio. DNI y email deben ser \u00fanicos.",
+        "description": "Crea un nuevo socio. Requiere admin. DNI y email deben ser \u00fanicos.",
         "operationId": "create_socio_socios__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -143,14 +358,46 @@
         }
       }
     },
+    "/socios/me": {
+      "get": {
+        "tags": [
+          "Socios"
+        ],
+        "summary": "Obtener perfil propio",
+        "description": "Retorna el perfil del socio autenticado.",
+        "operationId": "get_me_socios_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocioResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/socios/{socio_id}": {
       "get": {
         "tags": [
           "Socios"
         ],
         "summary": "Obtener socio",
-        "description": "Retorna los datos de un socio por su ID.",
+        "description": "Retorna los datos de un socio por su ID. Requiere autenticaci\u00f3n.",
         "operationId": "get_socio_socios__socio_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -190,8 +437,13 @@
           "Socios"
         ],
         "summary": "Actualizar socio",
-        "description": "Actualiza parcialmente los datos de un socio.",
+        "description": "Actualiza parcialmente los datos de un socio. Requiere admin.",
         "operationId": "update_socio_socios__socio_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -241,8 +493,13 @@
           "Socios"
         ],
         "summary": "Eliminar socio",
-        "description": "Elimina un socio y sus preguntas asociadas.",
+        "description": "Elimina un socio y sus preguntas asociadas. Requiere admin.",
         "operationId": "delete_socio_socios__socio_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -277,8 +534,13 @@
           "Preguntas por Socio"
         ],
         "summary": "Listar preferencias del socio",
-        "description": "Retorna todas las preferencias registradas para un socio.",
+        "description": "Retorna todas las preferencias registradas para un socio. Requiere autenticaci\u00f3n.",
         "operationId": "list_preguntas_socios__socio_id__preguntas__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -322,8 +584,13 @@
           "Preguntas por Socio"
         ],
         "summary": "Agregar o actualizar preferencia",
-        "description": "Crea o actualiza una preferencia (clave \u00fanica por socio).",
+        "description": "Crea o actualiza una preferencia (clave \u00fanica por socio). Requiere admin.",
         "operationId": "upsert_pregunta_socios__socio_id__preguntas__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -375,8 +642,13 @@
           "Preguntas por Socio"
         ],
         "summary": "Obtener una preferencia por clave",
-        "description": "Retorna la respuesta a una clave espec\u00edfica para un socio.",
+        "description": "Retorna la respuesta a una clave espec\u00edfica para un socio. Requiere autenticaci\u00f3n.",
         "operationId": "get_pregunta_socios__socio_id__preguntas__clave__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -424,8 +696,13 @@
           "Preguntas por Socio"
         ],
         "summary": "Actualizar una preferencia",
-        "description": "Actualiza el valor de una preferencia existente.",
+        "description": "Actualiza el valor de una preferencia existente. Requiere admin.",
         "operationId": "update_pregunta_socios__socio_id__preguntas__clave__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -483,8 +760,13 @@
           "Preguntas por Socio"
         ],
         "summary": "Eliminar una preferencia",
-        "description": "Elimina la respuesta a una clave espec\u00edfica para un socio.",
+        "description": "Elimina la respuesta a una clave espec\u00edfica para un socio. Requiere admin.",
         "operationId": "delete_pregunta_socios__socio_id__preguntas__clave__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -527,8 +809,13 @@
           "Registro de Ventas"
         ],
         "summary": "Listar ventas",
-        "description": "Retorna ventas con sus detalles. Filtrable por socio_id.",
+        "description": "Retorna ventas con sus detalles. Filtrable por socio_id. Requiere admin.",
         "operationId": "list_ventas_ventas__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "socio_id",
@@ -599,8 +886,13 @@
           "Registro de Ventas"
         ],
         "summary": "Registrar venta",
-        "description": "Crea un registro de venta con sus l\u00edneas de detalle.",
+        "description": "Crea un registro de venta con sus l\u00edneas de detalle. Requiere admin.",
         "operationId": "create_venta_ventas__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -641,8 +933,13 @@
           "Registro de Ventas"
         ],
         "summary": "Obtener venta",
-        "description": "Retorna una venta con sus detalles por ID.",
+        "description": "Retorna una venta con sus detalles por ID. Requiere admin.",
         "operationId": "get_venta_ventas__venta_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "venta_id",
@@ -682,8 +979,13 @@
           "Registro de Ventas"
         ],
         "summary": "Actualizar cabecera de venta",
-        "description": "Actualiza los campos de cabecera de una venta (no los detalles).",
+        "description": "Actualiza los campos de cabecera de una venta. Requiere admin.",
         "operationId": "update_venta_ventas__venta_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "venta_id",
@@ -733,8 +1035,13 @@
           "Registro de Ventas"
         ],
         "summary": "Eliminar venta",
-        "description": "Elimina una venta y todos sus detalles (cascade).",
+        "description": "Elimina una venta y todos sus detalles (cascade). Requiere admin.",
         "operationId": "delete_venta_ventas__venta_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "venta_id",
@@ -786,6 +1093,79 @@
   },
   "components": {
     "schemas": {
+      "AppleCredentials": {
+        "properties": {
+          "identity_token": {
+            "type": "string",
+            "title": "Identity Token",
+            "examples": [
+              "eyJraWQiOiJZdyIs..."
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "identity_token"
+        ],
+        "title": "AppleCredentials"
+      },
+      "Body_login_local_auth_token_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "password"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_local_auth_token_post"
+      },
       "ClavePregunta": {
         "type": "string",
         "enum": [
@@ -872,6 +1252,38 @@
         ],
         "title": "DetalleResponse"
       },
+      "FacebookCredentials": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "examples": [
+              "EAABsbCS..."
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "FacebookCredentials"
+      },
+      "GoogleCredentials": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "title": "Id Token",
+            "examples": [
+              "eyJhbGciOiJSUzI1NiIs..."
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleCredentials"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -950,6 +1362,73 @@
         ],
         "title": "PreguntaUpdate"
       },
+      "RegisterRequest": {
+        "properties": {
+          "nombre_apellido": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Nombre Apellido",
+            "examples": [
+              "Juan P\u00e9rez"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "examples": [
+              "juan@example.com"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password",
+            "examples": [
+              "s3cr3tPass!"
+            ]
+          },
+          "dni": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Dni",
+            "examples": [
+              "30123456"
+            ]
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "fecha_nacimiento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Nacimiento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre_apellido",
+          "email",
+          "password",
+          "dni"
+        ],
+        "title": "RegisterRequest"
+      },
       "SocioCreate": {
         "properties": {
           "nombre_apellido": {
@@ -976,8 +1455,14 @@
             ]
           },
           "email": {
-            "type": "string",
-            "format": "email",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email",
             "examples": [
               "juan@example.com"
@@ -1010,7 +1495,6 @@
         "type": "object",
         "required": [
           "nombre_apellido",
-          "email",
           "dni"
         ],
         "title": "SocioCreate"
@@ -1049,7 +1533,10 @@
                 "type": "null"
               }
             ],
-            "title": "Email"
+            "title": "Email",
+            "examples": [
+              "juan@example.com"
+            ]
           },
           "fecha_nacimiento": {
             "anyOf": [
@@ -1116,8 +1603,7 @@
           "email": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "email"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1152,6 +1638,29 @@
         },
         "type": "object",
         "title": "SocioUpdate"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "socio_id": {
+            "type": "integer",
+            "title": "Socio Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "socio_id"
+        ],
+        "title": "TokenResponse"
       },
       "ValidationError": {
         "properties": {
@@ -1204,10 +1713,10 @@
           },
           "fecha": {
             "type": "string",
-            "format": "date",
+            "format": "date-time",
             "title": "Fecha",
             "examples": [
-              "2024-06-15"
+              "2024-06-15T20:30:00"
             ]
           },
           "lugar": {
@@ -1275,10 +1784,10 @@
           },
           "fecha": {
             "type": "string",
-            "format": "date",
+            "format": "date-time",
             "title": "Fecha",
             "examples": [
-              "2024-06-15"
+              "2024-06-15T20:30:00"
             ]
           },
           "lugar": {
@@ -1343,7 +1852,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date"
+                "format": "date-time"
               },
               {
                 "type": "null"
@@ -1381,6 +1890,17 @@
         },
         "type": "object",
         "title": "VentaUpdate"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/token"
+          }
+        }
       }
     }
   }
