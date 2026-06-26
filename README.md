@@ -228,37 +228,53 @@ Flujo completo de redirecciones. Google autentica al usuario y devuelve un códi
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 BASE_URL=https://tu-dominio.com        ← base para construir el redirect_uri
-FRONTEND_URL=https://app.tu-dominio.com  ← destino final con el token
+FRONTEND_URLS=https://app.tu-dominio.com,https://admin.tu-dominio.com  ← whitelist de destinos
 ```
 
 #### Flujo paso a paso
 
 ```
-1. Cliente  →  GET /auth/google
+1. Cliente  →  GET /auth/google?redirect_uri=https://app.tu-dominio.com
                ↓
-2. Backend  →  302 → https://accounts.google.com/o/oauth2/v2/auth
+2. Backend  →  valida redirect_uri contra FRONTEND_URLS
+            →  302 → https://accounts.google.com/o/oauth2/v2/auth
                      ?client_id=...&redirect_uri=BASE_URL/auth/google/callback
                      &response_type=code&scope=openid email profile
-                     &state=<JWT firmado>&access_type=online
+                     &state=<JWT firmado con redirect_uri embebida>
                ↓  (usuario aprueba en Google)
 3. Google   →  302 → BASE_URL/auth/google/callback?code=...&state=...
                ↓
-4. Backend  →  verifica state (CSRF)
+4. Backend  →  verifica state (CSRF) y extrae redirect_uri del JWT
             →  POST https://oauth2.googleapis.com/token  (intercambia code → access_token)
             →  GET  https://www.googleapis.com/oauth2/v3/userinfo
             →  busca Socio por email en la DB
             →  emite JWT propio
                ↓
 5. Respuesta:
-   - Si FRONTEND_URL está configurado → 302 → FRONTEND_URL?token=...&socio_id=...
-   - Si no                            → 200 JSON con TokenResponse
+   - Si redirect_uri fue pasada y es válida → 302 → redirect_uri?token=...&socio_id=...
+   - Si no se pasó redirect_uri             → 302 → primera URL de FRONTEND_URLS
+   - Si FRONTEND_URLS está vacío            → 200 JSON con TokenResponse
 ```
 
 > **Nota**: Google solo autentica; no crea cuentas nuevas. El socio debe existir previamente en la DB con ese email. Si no existe, responde `404 Not Found`.
 
+#### Soporte para múltiples frontends
+
+`FRONTEND_URLS` es una lista separada por comas. Cada frontend pasa su propia URL al iniciar el login:
+
+```
+# App principal
+GET /auth/google?redirect_uri=https://app.panacea.com/auth/callback
+
+# Panel admin
+GET /auth/google?redirect_uri=https://admin.panacea.com/auth/callback
+```
+
+Si `redirect_uri` no está en la whitelist el backend responde `400 Bad Request` antes de redirigir a Google. La URL válida se embebe en el JWT del `state` (firmado y con expiración de 10 min), por lo que no puede ser alterada en el callback.
+
 #### Protección CSRF (state)
 
-El parámetro `state` es un JWT firmado con `SECRET_KEY` que expira en **10 minutos**. El backend lo verifica en el callback antes de continuar. Cualquier state inválido o expirado responde `400 Bad Request`.
+El parámetro `state` es un JWT firmado con `SECRET_KEY` que expira en **10 minutos**. Contiene un `jti` aleatorio y la `redirect_uri` del frontend. El backend lo verifica en el callback antes de continuar. Cualquier state inválido o expirado responde `400 Bad Request`.
 
 ---
 
@@ -275,7 +291,7 @@ FACEBOOK_APP_SECRET=...
 
 | Paso | Endpoint |
 |------|---------|
-| Inicio | `GET /auth/facebook` |
+| Inicio | `GET /auth/facebook?redirect_uri=https://app.tu-dominio.com` |
 | Callback | `GET /auth/facebook/callback?code=...&state=...` |
 
 ---
@@ -295,7 +311,7 @@ APPLE_PRIVATE_KEY=...
 
 | Paso | Endpoint |
 |------|---------|
-| Inicio | `GET /auth/apple` |
+| Inicio | `GET /auth/apple?redirect_uri=https://app.tu-dominio.com` |
 | Callback | `POST /auth/apple/callback` (body form-encoded) |
 
 ---
