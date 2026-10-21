@@ -22,4 +22,5 @@ class CumpleanioResponse(BaseModel):
     telefono: str | None
     email: str | None
     fecha_nacimiento: date
+    fecha_cumple: date
     edad: int
