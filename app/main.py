@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
-from app.routers import preguntas, socios, ventas
+from app.routers import preguntas, reportes, socios, ventas
 
 app = FastAPI(
     title="Panacea Socios API",
@@ -27,6 +27,7 @@ app.include_router(auth_router)
 app.include_router(socios.router)
 app.include_router(preguntas.router)
 app.include_router(ventas.router)
+app.include_router(reportes.router)
 
 
 @app.get("/", tags=["Health"], summary="Health check")
