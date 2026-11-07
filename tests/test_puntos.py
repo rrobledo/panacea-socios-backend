@@ -112,6 +112,8 @@ def test_compra_genera_puntos_con_regla_vigente(client, admin, crear_socio):
     assert saldo(client, socio) == 25
     actividad = client.get("/recompensas/actividad", headers=auth(socio)).json()
     assert actividad[0]["tipo"] == "ACUMULACION" and actividad[0]["puntos"] == 25
+    # El saldo se expone en el socio para mostrarlo al registrar compras
+    assert client.get(f"/socios/{socio.id}", headers=auth(admin)).json()["saldo_puntos"] == 25
 
 
 def test_tope_por_compra_y_monto_menor(client, admin, crear_socio):

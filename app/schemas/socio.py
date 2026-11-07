@@ -37,5 +37,6 @@ class SocioResponse(SocioBase):
     id: int
     # Solo informativo para la UI; el backend valida el rol con require_admin
     es_admin: bool = False
+    saldo_puntos: int = 0
 
     model_config = {"from_attributes": True}
