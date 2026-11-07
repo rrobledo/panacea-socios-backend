@@ -361,6 +361,38 @@ El personal puede elegir un beneficio al registrar la venta, sin que el socio ge
 
 El `limite_por_socio` de cada beneficio cuenta los canjes de la app y del mostrador (sin los anulados).
 
+## Perfiles de preferencias con IA
+
+Un proceso diario genera, para cada socio con compras nuevas, un perfil de gustos con Claude a
+partir del detalle de productos de sus compras de los últimos 12 meses (ventas cruzadas con
+`documentos` / `documentos_cp` y `panacea_sales_v2`; las que no se pueden cruzar se ignoran).
+A Claude solo se le envían productos, categorías, cantidades y fechas, nunca datos personales.
+
+- **Job**: `GET /jobs/perfiles` (Vercel Cron, 07:00 UTC, con `CRON_SECRET`). Usa la Message
+  Batches API: cada corrida procesa el lote anterior si terminó y envía uno nuevo, así que los
+  perfiles se actualizan con un día de demora. Para correrlo a mano:
+  `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/jobs/perfiles` (una segunda
+  llamada, cuando el lote terminó, guarda los perfiles).
+- **Variables**:
+
+  | Variable | Por defecto | Uso |
+  |---|---|---|
+  | `ANTHROPIC_API_KEY` | (vacía) | Sin ella el proceso no hace nada |
+  | `PERFILES_ACTIVO` | `true` | `false` lo detiene sin desplegar |
+  | `PERFILES_MODELO` | `claude-opus-5-5` | Modelo de Claude |
+  | `PERFILES_MESES_HISTORIA` | `12` | Meses de compras analizados |
+  | `PERFILES_MAX_POR_LOTE` | `500` | Socios por día (la carga inicial se reparte en varios días) |
+  | `PERFILES_MAX_PRODUCTOS` | `100` | Productos enviados por socio |
+
+- **Costo estimado** (precios de lote): ~US$0,02–0,03 por socio con `claude-opus-5-5`,
+  ~US$0,01 con `claude-sonnet-5-5`, ~US$0,001 con `claude-haiku-5-5`. Solo se reprocesan los
+  socios que compraron desde su último perfil.
+- **Endpoints**:
+  - `GET /socios/{id}/preferencias`: perfil del socio (404 `PERFIL_NO_DISPONIBLE` si no tiene).
+  - `GET /reportes/preferencias?q=chocolate[&incluir_resumen=true&skip=&limit=]`: socios por
+    etiqueta, producto o categoría (sin distinguir acentos), ordenados por relevancia.
+  - `GET /reportes/preferencias/etiquetas`: etiquetas existentes con su cantidad de socios.
+
 ### Pruebas
 
 Requieren un PostgreSQL **local** (las pruebas borran el esquema):

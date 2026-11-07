@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     admin_emails: str = ""
     # Vercel Cron envía "Authorization: Bearer $CRON_SECRET" a /jobs/diario
     cron_secret: str = ""
+    # Perfiles de preferencias con IA (/jobs/perfiles). Sin API key el proceso queda desactivado.
+    anthropic_api_key: str = ""
+    perfiles_activo: bool = True
+    perfiles_modelo: str = "claude-opus-5-5"
+    perfiles_meses_historia: int = 12
+    perfiles_max_por_lote: int = 500
+    perfiles_max_productos: int = 100
     base_url: str = "http://localhost:8000"
     frontend_urls: str = ""
     google_client_id: str = ""

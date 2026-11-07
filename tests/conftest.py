@@ -41,7 +41,7 @@ SessionLocal = database.SessionLocal
 from app.main import app  # noqa: E402
 from app.models.socio import Socio  # noqa: E402
 
-TABLAS = "movimientos_puntos, canjes, beneficios, reglas_puntos, detalle_registro_ventas, registro_ventas, socios"
+TABLAS = "lote_perfil_items, lotes_perfiles, perfiles_socio, movimientos_puntos, canjes, beneficios, reglas_puntos, detalle_registro_ventas, registro_ventas, socios"
 
 
 @pytest.fixture(scope="session", autouse=True)

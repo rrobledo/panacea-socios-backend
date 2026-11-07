@@ -7,7 +7,10 @@ from app.auth import passport
 from app.auth.utils import hash_password
 from app.config import settings
 from app.database import get_db
+from app.models.perfil import PerfilSocio
 from app.models.socio import Socio
+from app.schemas.perfil import PerfilSocioResponse
+from app.services.puntos import error as error_negocio
 from app.schemas.socio import SocioCreate, SocioResponse, SocioUpdate
 
 router = APIRouter(prefix="/socios", tags=["Socios"])
@@ -108,3 +111,21 @@ def delete_socio(
     socio = _get_or_404(socio_id, db)
     db.delete(socio)
     db.commit()
+
+
+@router.get("/{socio_id}/preferencias", response_model=PerfilSocioResponse, summary="Gustos y preferencias del socio")
+def get_preferencias(
+    socio_id: int,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Perfil de gustos generado con IA a partir de sus compras (se actualiza a diario).
+
+    404 `SOCIO_NO_ENCONTRADO` o `PERFIL_NO_DISPONIBLE` (todavía no se generó).
+    """
+    if db.get(Socio, socio_id) is None:
+        raise error_negocio("SOCIO_NO_ENCONTRADO", "Socio no encontrado", status.HTTP_404_NOT_FOUND)
+    perfil = db.get(PerfilSocio, socio_id)
+    if perfil is None:
+        raise error_negocio("PERFIL_NO_DISPONIBLE", "Todavía no hay perfil de preferencias para este socio", status.HTTP_404_NOT_FOUND)
+    return perfil

@@ -15,6 +15,10 @@
     {
       "path": "/jobs/diario",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/jobs/perfiles",
+      "schedule": "0 7 * * *"
     }
   ]
 }
