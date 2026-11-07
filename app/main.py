@@ -1,8 +1,19 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
 from app.routers import admin_puntos, canjes, jobs, preguntas, recompensas, reportes, socios, ventas
+
+# Los logs de la app (logger "app.*") van a stdout para que aparezcan en Vercel.
+# Sin esto, Python descarta todo lo que esté por debajo de WARNING.
+_app_logger = logging.getLogger("app")
+if not _app_logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    _app_logger.addHandler(_handler)
+    _app_logger.setLevel(logging.INFO)
 
 app = FastAPI(
     title="Panacea Socios API",

@@ -54,7 +54,9 @@ def job_perfiles(db: Session = Depends(get_db), client=Depends(get_anthropic_cli
     pendiente, envía un lote nuevo con los socios que tienen compras nuevas. No espera a la IA."""
     activo, motivo = perfiles_svc.proceso_activo()
     if not activo:
+        logger.warning("Job de perfiles desactivado: %s", motivo)
         return {"activo": False, "motivo": motivo}
+    logger.info("Job de perfiles: inicio (modelo %s)", settings.perfiles_modelo)
 
     resultado = perfiles_svc.procesar_lotes_pendientes(db, client)
     db.commit()
