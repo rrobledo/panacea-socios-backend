@@ -55,10 +55,18 @@ def test_me_expone_es_admin(client, admin, crear_socio):
     assert client.get("/socios/me", headers=auth(socio)).json()["es_admin"] is False
 
 
-def test_endpoints_admin_requieren_rol(client, crear_socio):
+def test_maestro_abierto_a_usuarios_autenticados(client, crear_socio):
     socio = crear_socio()
-    for metodo, url in [("get", "/admin/beneficios"), ("get", "/admin/reglas-puntos"), ("get", "/admin/configuracion")]:
-        assert getattr(client, metodo)(url, headers=auth(socio)).status_code == 403
+    for url in ["/admin/beneficios", "/admin/reglas-puntos", "/admin/configuracion"]:
+        assert client.get(url, headers=auth(socio)).status_code == 200
+        assert client.get(url).status_code == 401
+
+
+def test_ajustes_y_saldos_requieren_rol_admin(client, crear_socio):
+    socio = crear_socio()
+    assert client.get(f"/admin/socios/{socio.id}/puntos", headers=auth(socio)).status_code == 403
+    r = client.post("/admin/ajustes-puntos", json={"socio_id": socio.id, "puntos": 10, "motivo": "test"}, headers=auth(socio))
+    assert r.status_code == 403
 
 
 # ── Reglas de conversión ───────────────────────────────────────────────────────

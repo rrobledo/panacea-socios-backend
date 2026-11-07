@@ -1,8 +1,14 @@
-"""Administración del programa de puntos (pantallas "Maestro"). Requiere rol admin."""
+"""Administración del programa de puntos (pantallas "Maestro").
+
+Por ahora beneficios, reglas y configuración están abiertos a cualquier usuario autenticado
+(`require_maestro`). Saldos y ajustes manuales siguen requiriendo rol admin.
+Para volver a restringir el maestro, hacer que `require_maestro` delegue en `require_admin`.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth import passport
 from app.auth.dependencies import require_admin
 from app.database import get_db
 from app.models.puntos import Beneficio, Canje, ReglaPuntos
@@ -23,6 +29,11 @@ from app.services import puntos as svc
 router = APIRouter(prefix="/admin", tags=["Admin · Puntos"])
 
 
+def require_maestro(current_socio: Socio = passport.authenticate("jwt")) -> Socio:
+    """Acceso a las pantallas Maestro: cualquier usuario autenticado (temporal)."""
+    return current_socio
+
+
 # ── Beneficios ─────────────────────────────────────────────────────────────────
 
 def _beneficio_response(db: Session, b: Beneficio) -> BeneficioAdminResponse:
@@ -33,7 +44,7 @@ def _beneficio_response(db: Session, b: Beneficio) -> BeneficioAdminResponse:
 
 
 @router.get("/beneficios", response_model=list[BeneficioAdminResponse], summary="Listar beneficios")
-def list_beneficios(db: Session = Depends(get_db), _: Socio = Depends(require_admin)):
+def list_beneficios(db: Session = Depends(get_db), _: Socio = Depends(require_maestro)):
     conteos = dict(db.execute(select(Canje.beneficio_id, func.count()).group_by(Canje.beneficio_id)).all())
     beneficios = db.execute(select(Beneficio).order_by(Beneficio.activo.desc(), Beneficio.costo_puntos)).scalars().all()
     result = []
@@ -45,7 +56,7 @@ def list_beneficios(db: Session = Depends(get_db), _: Socio = Depends(require_ad
 
 
 @router.post("/beneficios", response_model=BeneficioAdminResponse, status_code=status.HTTP_201_CREATED, summary="Crear beneficio")
-def create_beneficio(body: BeneficioCreate, db: Session = Depends(get_db), _: Socio = Depends(require_admin)):
+def create_beneficio(body: BeneficioCreate, db: Session = Depends(get_db), _: Socio = Depends(require_maestro)):
     beneficio = Beneficio(**body.model_dump())
     db.add(beneficio)
     db.commit()
@@ -55,7 +66,7 @@ def create_beneficio(body: BeneficioCreate, db: Session = Depends(get_db), _: So
 
 @router.put("/beneficios/{beneficio_id}", response_model=BeneficioAdminResponse, summary="Actualizar beneficio")
 def update_beneficio(
-    beneficio_id: int, body: BeneficioUpdate, db: Session = Depends(get_db), _: Socio = Depends(require_admin)
+    beneficio_id: int, body: BeneficioUpdate, db: Session = Depends(get_db), _: Socio = Depends(require_maestro)
 ):
     """Actualización parcial (incluye activar/desactivar). Los cupones emitidos conservan su snapshot."""
     beneficio = db.get(Beneficio, beneficio_id)
@@ -73,12 +84,12 @@ def update_beneficio(
 # ── Reglas de conversión ───────────────────────────────────────────────────────
 
 @router.get("/reglas-puntos", response_model=list[ReglaResponse], summary="Historial de reglas de conversión")
-def list_reglas(db: Session = Depends(get_db), _: Socio = Depends(require_admin)):
+def list_reglas(db: Session = Depends(get_db), _: Socio = Depends(require_maestro)):
     return db.execute(select(ReglaPuntos).order_by(ReglaPuntos.vigente_desde.desc())).scalars().all()
 
 
 @router.post("/reglas-puntos", response_model=ReglaResponse, status_code=status.HTTP_201_CREATED, summary="Crear regla de conversión")
-def create_regla(body: ReglaCreate, db: Session = Depends(get_db), admin: Socio = Depends(require_admin)):
+def create_regla(body: ReglaCreate, db: Session = Depends(get_db), admin: Socio = Depends(require_maestro)):
     """Cierra la regla abierta y abre la nueva desde `vigente_desde` (>= hoy). No hay edición retroactiva."""
     if body.vigente_desde < svc.hoy_local():
         raise svc.error("VIGENCIA_RETROACTIVA", "La fecha de inicio no puede ser anterior a hoy", 422)
@@ -100,7 +111,7 @@ def create_regla(body: ReglaCreate, db: Session = Depends(get_db), admin: Socio 
 
 
 @router.delete("/reglas-puntos/{regla_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar regla programada")
-def delete_regla(regla_id: int, db: Session = Depends(get_db), _: Socio = Depends(require_admin)):
+def delete_regla(regla_id: int, db: Session = Depends(get_db), _: Socio = Depends(require_maestro)):
     """Solo reglas que todavía no empezaron. La regla anterior vuelve a quedar abierta."""
     regla = db.get(ReglaPuntos, regla_id)
     if regla is None:
@@ -119,14 +130,14 @@ def delete_regla(regla_id: int, db: Session = Depends(get_db), _: Socio = Depend
 # ── Configuración ──────────────────────────────────────────────────────────────
 
 @router.get("/configuracion", response_model=ConfigProgramaSchema, summary="Configuración del programa")
-def get_configuracion(db: Session = Depends(get_db), _: Socio = Depends(require_admin)):
+def get_configuracion(db: Session = Depends(get_db), _: Socio = Depends(require_maestro)):
     config = svc.get_config(db)
     db.commit()
     return config
 
 
 @router.put("/configuracion", response_model=ConfigProgramaSchema, summary="Actualizar configuración")
-def update_configuracion(body: ConfigProgramaSchema, db: Session = Depends(get_db), _: Socio = Depends(require_admin)):
+def update_configuracion(body: ConfigProgramaSchema, db: Session = Depends(get_db), _: Socio = Depends(require_maestro)):
     config = svc.get_config(db)
     for field, value in body.model_dump().items():
         setattr(config, field, value)
