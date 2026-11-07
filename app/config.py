@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     access_token_expire_days: int = 7
     admin_emails: str = ""
+    # Vercel Cron envía "Authorization: Bearer $CRON_SECRET" a /jobs/diario
+    cron_secret: str = ""
     base_url: str = "http://localhost:8000"
     frontend_urls: str = ""
     google_client_id: str = ""

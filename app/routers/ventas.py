@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
@@ -8,7 +9,9 @@ from app.auth import passport
 from app.database import get_db
 from app.models.socio import Socio
 from app.models.venta import DetalleRegistroVenta, RegistroVenta
-from app.schemas.venta import ComprasPorCategoriaResponse, ComprasSemanalResponse, VentaCreate, VentaDetailResponse, VentaResponse, VentaUpdate
+from app.models.puntos import EstadoCanje
+from app.schemas.venta import ComprasPorCategoriaResponse, ComprasSemanalResponse, VentaCreate, VentaCreateResponse, VentaDetailResponse, VentaResponse, VentaUpdate
+from app.services import puntos as puntos_svc
 
 router = APIRouter(prefix="/ventas", tags=["Registro de Ventas"])
 
@@ -35,15 +38,27 @@ def list_ventas(
     return q.offset(skip).limit(limit).all()
 
 
-@router.post("/", response_model=VentaResponse, status_code=status.HTTP_201_CREATED, summary="Registrar venta")
+@router.post("/", response_model=VentaCreateResponse, status_code=status.HTTP_201_CREATED, summary="Registrar venta")
 def create_venta(
     body: VentaCreate,
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
-    """Crea un registro de venta con sus líneas de detalle. Requiere autenticación."""
+    """Crea un registro de venta con sus líneas de detalle. Requiere autenticación.
+
+    - `cupon_codigo` (opcional, uno solo): aplica el descuento del cupón; `importe` se
+      interpreta como monto antes del descuento y se registra el neto. 409 `CUPON_INVALIDO`.
+    - Si la venta tiene socio, genera los puntos con la regla vigente a la fecha de la venta.
+    """
     detalles_data = body.detalles
-    venta_data = body.model_dump(exclude={"detalles"})
+    venta_data = body.model_dump(exclude={"detalles", "cupon_codigo"})
+    venta_data["fecha"] = puntos_svc.a_utc_naive(venta_data["fecha"])
+
+    canje, descuento = None, Decimal("0")
+    if body.cupon_codigo:
+        canje, descuento = puntos_svc.aplicar_cupon(db, body.cupon_codigo, body.socio_id, body.importe)
+        venta_data["importe"] = body.importe - descuento
+
     venta = RegistroVenta(**venta_data)
     db.add(venta)
     db.flush()
@@ -52,9 +67,20 @@ def create_venta(
         detalle = DetalleRegistroVenta(registro_venta_id=venta.id, **d.model_dump())
         db.add(detalle)
 
+    if canje is not None:
+        canje.estado = EstadoCanje.USADO
+        canje.venta_id = venta.id
+        canje.monto_descontado = descuento
+        canje.usado_en = puntos_svc.ahora_utc()
+
+    puntos = puntos_svc.acumular_por_venta(db, venta)
+
     db.commit()
     db.refresh(venta)
-    return venta
+    resp = VentaCreateResponse.model_validate(venta)
+    resp.descuento = descuento
+    resp.puntos_generados = puntos
+    return resp
 
 
 @router.get("/estadisticas/compras_semanales", response_model=list[ComprasSemanalResponse], summary="Compras semanales")
@@ -181,8 +207,9 @@ def delete_venta(
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
-    """Elimina una venta y todos sus detalles (cascade). Requiere autenticación."""
+    """Elimina una venta y todos sus detalles (cascade). Revierte los puntos que generó. Requiere autenticación."""
     venta = _get_or_404(venta_id, db)
+    puntos_svc.reversar_venta(db, venta)
     db.delete(venta)
     db.commit()
 

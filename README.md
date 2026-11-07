@@ -328,6 +328,31 @@ El guard valida que el JWT sea válido **y** que el email del socio esté en esa
 
 ---
 
+## Programa de puntos
+
+Endpoints: `/recompensas/*` (socio autenticado), `/canjes/{codigo}` (validación en caja),
+`/admin/*` (beneficios, reglas de conversión, configuración y ajustes; requiere admin) y
+`POST /ventas/` acepta `cupon_codigo` y genera los puntos de la compra.
+
+- Migración: `alembic upgrade head` (revisión `0004`). Luego cargar la primera regla de
+  conversión desde la pantalla "Maestro → Tabla de conversión" de Club Socios: sin regla
+  vigente, las compras no generan puntos.
+- Job diario (Vercel Cron, definido en `vercel.json`): `GET /jobs/diario`. Requiere la
+  variable `CRON_SECRET` (Vercel la envía como `Authorization: Bearer …`).
+- Compras históricas: `python -m scripts.migrar_puntos_historicos --help` (simula por defecto).
+
+### Pruebas
+
+Requieren un PostgreSQL **local** (las pruebas borran el esquema):
+
+```bash
+docker run -d --name puntos-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=puntos -p 55432:5432 postgres:16-alpine
+pip install -r requirements-dev.txt
+TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/puntos pytest
+```
+
+---
+
 ## Seguridad
 
 - `DATABASE_URL` nunca se hardcodea — siempre desde variable de entorno

@@ -29,6 +29,9 @@ class VentaBase(BaseModel):
 
 class VentaCreate(VentaBase):
     detalles: list[DetalleCreate] = Field(default_factory=list)
+    # Un solo cupón por compra. Si viene, `importe` es el monto ANTES del descuento
+    # y se registra el neto (importe - descuento).
+    cupon_codigo: str | None = Field(None, max_length=20, examples=["K7M3PQ9X"])
 
 
 class VentaUpdate(BaseModel):
@@ -43,6 +46,11 @@ class VentaResponse(VentaBase):
     detalles: list[DetalleResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class VentaCreateResponse(VentaResponse):
+    descuento: Decimal = Decimal("0")
+    puntos_generados: int = 0
 
 
 class VentaDetailResponse(BaseModel):

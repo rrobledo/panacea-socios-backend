@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, String
+from sqlalchemy import Boolean, Date, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -17,6 +17,8 @@ class Socio(Base):
     dni: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(200))
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Saldo cacheado del ledger movimientos_puntos (se actualiza en la misma transacción)
+    saldo_puntos: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     preguntas: Mapped[list["PreguntaPorSocio"]] = relationship(  # noqa: F821
         "PreguntaPorSocio", back_populates="socio", cascade="all, delete-orphan"

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import passport
 from app.auth.utils import hash_password
+from app.config import settings
 from app.database import get_db
 from app.models.socio import Socio
 from app.schemas.socio import SocioCreate, SocioResponse, SocioUpdate
@@ -58,8 +59,10 @@ def create_socio(
 
 @router.get("/me", response_model=SocioResponse, summary="Obtener perfil propio")
 def get_me(current_socio: Socio = passport.authenticate("jwt")):
-    """Retorna el perfil del socio autenticado."""
-    return current_socio
+    """Retorna el perfil del socio autenticado. `es_admin` indica si su email está en ADMIN_EMAILS."""
+    resp = SocioResponse.model_validate(current_socio)
+    resp.es_admin = (current_socio.email or "").lower() in settings.admin_emails_set
+    return resp
 
 
 @router.get("/{socio_id}", response_model=SocioResponse, summary="Obtener socio")
