@@ -24,3 +24,4 @@ class CumpleanioResponse(BaseModel):
     fecha_nacimiento: date
     fecha_cumple: date
     edad: int
+    lugar_principal: str | None = None

@@ -17,18 +17,39 @@ router = APIRouter(prefix="/reportes", tags=["Reportes"])
 
 _TZ = ZoneInfo("America/Argentina/Cordoba")
 
+_LUGAR_QUERY = Query(None, max_length=200, description="Sucursal (sin distinguir mayúsculas ni acentos). Vacío = todas")
+
+# Sucursal principal de un socio (alias `s`): donde registró más compras; empate → la de compra más reciente.
+_LUGAR_PRINCIPAL = """(
+    SELECT min(trim(rv.lugar)) FROM registro_ventas rv
+    WHERE rv.socio_id = s.id AND trim(coalesce(rv.lugar, '')) <> ''
+    GROUP BY unaccent(lower(trim(rv.lugar)))
+    ORDER BY count(*) DESC, max(rv.fecha) DESC
+    LIMIT 1
+)"""
+
+# Filtro opcional por sucursal sobre una columna de texto
+def _filtro_lugar(columna: str) -> str:
+    return f"(CAST(:lugar AS text) IS NULL OR unaccent(lower(trim({columna}))) = unaccent(lower(trim(CAST(:lugar AS text)))))"
+
+
+def _lugar(valor: str | None) -> str | None:
+    return valor.strip() or None if valor else None
+
 
 @router.get("/ranking_compras", response_model=list[RankingComprasResponse], summary="Socios ordenados por mayor compra")
 def ranking_compras(
     desde: date | None = None,
     hasta: date | None = None,
+    lugar: str | None = _LUGAR_QUERY,
     limit: int = 500,
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
-    """Total comprado por socio (suma de importes de registro_ventas), de mayor a menor. Filtrable por rango de fechas."""
-    filters = ["r.socio_id IS NOT NULL"]
-    params: dict = {"limit": limit}
+    """Total comprado por socio (suma de importes de registro_ventas), de mayor a menor.
+    Filtrable por rango de fechas y por sucursal (solo cuenta las compras registradas en ese `lugar`)."""
+    filters = ["r.socio_id IS NOT NULL", _filtro_lugar("r.lugar")]
+    params: dict = {"limit": limit, "lugar": _lugar(lugar)}
 
     if desde is not None:
         filters.append("(r.fecha - INTERVAL '3 hours')::date >= :desde")
@@ -62,11 +83,13 @@ def ranking_compras(
 def cumpleanios(
     desde: date | None = None,
     hasta: date | None = None,
+    lugar: str | None = _LUGAR_QUERY,
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
     """Socios que cumplen años entre `desde` y `hasta` (ambos inclusive; por defecto, hoy en Argentina),
-    ordenados por día de cumpleaños. Los nacidos el 29/02 se incluyen el 28/02 en años no bisiestos."""
+    ordenados por día de cumpleaños. Los nacidos el 29/02 se incluyen el 28/02 en años no bisiestos.
+    Con `lugar`, solo los socios cuya sucursal principal (donde más compran) es esa."""
     hoy = datetime.now(_TZ).date()
     desde = desde or hoy
     hasta = hasta or desde
@@ -75,12 +98,14 @@ def cumpleanios(
     if (hasta - desde).days > 366:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El rango no puede superar un año")
 
-    sql = text("""
+    sql = text(f"""
+        SELECT * FROM (
         WITH dias AS (
             SELECT d::date AS dia
             FROM generate_series(CAST(:desde AS date), CAST(:hasta AS date), INTERVAL '1 day') AS d
         )
-        SELECT dias.dia AS fecha_cumple, s.id AS socio_id, s.nombre_apellido, s.dni, s.telefono, s.email, s.fecha_nacimiento
+        SELECT dias.dia AS fecha_cumple, s.id AS socio_id, s.nombre_apellido, s.dni, s.telefono, s.email, s.fecha_nacimiento,
+               {_LUGAR_PRINCIPAL} AS lugar_principal
         FROM dias
             JOIN socios s ON s.fecha_nacimiento IS NOT NULL AND (
                 (EXTRACT(MONTH FROM s.fecha_nacimiento) = EXTRACT(MONTH FROM dias.dia)
@@ -89,9 +114,11 @@ def cumpleanios(
                     AND EXTRACT(MONTH FROM dias.dia) = 2 AND EXTRACT(DAY FROM dias.dia) = 28
                     AND EXTRACT(DAY FROM make_date(EXTRACT(YEAR FROM dias.dia)::int, 3, 1) - INTERVAL '1 day') = 28)
             )
-        ORDER BY dias.dia, s.nombre_apellido
+        ) t
+        WHERE {_filtro_lugar("t.lugar_principal")}
+        ORDER BY fecha_cumple, nombre_apellido
     """)
-    rows = db.execute(sql, {"desde": desde, "hasta": hasta}).mappings().all()
+    rows = db.execute(sql, {"desde": desde, "hasta": hasta, "lugar": _lugar(lugar)}).mappings().all()
     return [
         CumpleanioResponse(**row, edad=row["fecha_cumple"].year - row["fecha_nacimiento"].year)
         for row in rows
@@ -131,6 +158,7 @@ _SOCIOS_POR_PREFERENCIA_SQL = text(f"""
         SELECT s.id AS socio_id, s.nombre_apellido, s.dni, s.telefono, s.email,
                p.etiquetas, p.productos_favoritos, p.categorias_favoritas, p.resumen,
                p.generado_en AS perfil_generado_en,
+               {_LUGAR_PRINCIPAL} AS lugar_principal,
                GREATEST(
                    CASE WHEN {_COINCIDE.format(col="etiquetas")} THEN 4 ELSE 0 END,
                    CASE WHEN {_COINCIDE.format(col="productos_favoritos")} THEN 3 ELSE 0 END,
@@ -140,7 +168,7 @@ _SOCIOS_POR_PREFERENCIA_SQL = text(f"""
         FROM perfiles_socio p
             JOIN socios s ON s.id = p.socio_id
     ) t
-    WHERE relevancia > 0
+    WHERE relevancia > 0 AND {_filtro_lugar("t.lugar_principal")}
     ORDER BY relevancia DESC, nombre_apellido, socio_id
     OFFSET :skip LIMIT :limit
 """)
@@ -150,6 +178,7 @@ _SOCIOS_POR_PREFERENCIA_SQL = text(f"""
 def socios_por_preferencia(
     q: str = Query(..., min_length=2, max_length=100, description="Producto, categoría o preferencia (sin distinguir acentos)"),
     incluir_resumen: bool = False,
+    lugar: str | None = _LUGAR_QUERY,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -160,18 +189,20 @@ def socios_por_preferencia(
 
     Coincidencia parcial sin distinguir mayúsculas ni acentos. Orden por relevancia
     (etiqueta > producto > categoría > resumen) y después por nombre.
+    Con `lugar`, solo los socios cuya sucursal principal (donde más compran) es esa.
     """
     qn = _normalizar(q.strip())
     if len(qn) < 2:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="q debe tener al menos 2 caracteres")
     patron = "%" + qn.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     filas = db.execute(_SOCIOS_POR_PREFERENCIA_SQL, {
-        "patron": patron, "incluir_resumen": incluir_resumen, "skip": skip, "limit": limit,
+        "patron": patron, "incluir_resumen": incluir_resumen, "skip": skip, "limit": limit, "lugar": _lugar(lugar),
     }).mappings().all()
     return [
         SocioPorPreferenciaResponse(
             socio_id=f["socio_id"], nombre_apellido=f["nombre_apellido"], dni=f["dni"], telefono=f["telefono"],
             email=f["email"], relevancia=f["relevancia"], perfil_generado_en=f["perfil_generado_en"],
+            lugar_principal=f["lugar_principal"],
             coincidencias=_coincidencias(f, qn, incluir_resumen),
         )
         for f in filas
@@ -180,13 +211,18 @@ def socios_por_preferencia(
 
 @router.get("/preferencias/etiquetas", response_model=list[EtiquetaConteoResponse], summary="Etiquetas de preferencia y cantidad de socios")
 def etiquetas_preferencias(
+    lugar: str | None = _LUGAR_QUERY,
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
-    """Todas las etiquetas presentes en los perfiles, con cuántos socios tiene cada una."""
-    filas = db.execute(text("""
+    """Todas las etiquetas presentes en los perfiles, con cuántos socios tiene cada una.
+    Con `lugar`, cuenta solo los socios cuya sucursal principal es esa."""
+    filas = db.execute(text(f"""
         SELECT e AS etiqueta, count(DISTINCT p.socio_id) AS socios
-        FROM perfiles_socio p, jsonb_array_elements_text(p.etiquetas) e
+        FROM perfiles_socio p
+            JOIN socios s ON s.id = p.socio_id,
+            jsonb_array_elements_text(p.etiquetas) e
+        WHERE {_filtro_lugar(_LUGAR_PRINCIPAL)}
         GROUP BY e ORDER BY socios DESC, e
-    """)).mappings().all()
+    """), {"lugar": _lugar(lugar)}).mappings().all()
     return [EtiquetaConteoResponse(**f) for f in filas]

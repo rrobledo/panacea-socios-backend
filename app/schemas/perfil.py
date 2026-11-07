@@ -44,6 +44,7 @@ class SocioPorPreferenciaResponse(BaseModel):
     relevancia: int
     coincidencias: list[Coincidencia]
     perfil_generado_en: datetime
+    lugar_principal: str | None = None
 
     @field_serializer("perfil_generado_en")
     def _ser_generado(self, v: datetime):
