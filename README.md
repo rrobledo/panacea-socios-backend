@@ -152,10 +152,11 @@ Claves válidas:
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | `/ventas/` | Listar ventas (filtro: `?socio_id=`) |
-| POST | `/ventas/` | Registrar venta con detalles |
+| POST | `/ventas/` | Registrar venta con detalles (opcional: `cupon_codigo` o `beneficio_id`) |
+| GET | `/ventas/beneficios-disponibles` | Beneficios que un socio puede usar (`?socio_id=&importe=`) |
 | GET | `/ventas/{id}` | Obtener venta con detalles |
 | PUT | `/ventas/{id}` | Actualizar cabecera de venta |
-| DELETE | `/ventas/{id}` | Eliminar venta y detalles |
+| DELETE | `/ventas/{id}` | Eliminar venta y detalles (revierte puntos y devuelve el beneficio usado) |
 
 ---
 
@@ -340,6 +341,23 @@ Endpoints: `/recompensas/*` (socio autenticado), `/canjes/{codigo}` (validación
 - Job diario (Vercel Cron, definido en `vercel.json`): `GET /jobs/diario`. Requiere la
   variable `CRON_SECRET` (Vercel la envía como `Authorization: Bearer …`).
 - Compras históricas: `python -m scripts.migrar_puntos_historicos --help` (simula por defecto).
+
+### Beneficio en el mostrador
+
+El personal puede elegir un beneficio al registrar la venta, sin que el socio genere un cupón antes:
+
+1. Al elegir el socio, `GET /ventas/beneficios-disponibles?socio_id=…&importe=…` devuelve
+   `saldo_puntos` y los beneficios vigentes con `usable`, `motivo` (`SALDO_INSUFICIENTE`,
+   `LIMITE_ALCANZADO`, `PROGRAMA_INACTIVO`, …) y `descuento_estimado`.
+2. `POST /ventas/` con `beneficio_id` (requiere `socio_id`, excluye `cupon_codigo`; `importe` es el
+   monto antes del descuento). En una sola transacción descuenta los puntos, crea el canje
+   (origen `MOSTRADOR`, estado `USADO`), registra el neto y genera los puntos sobre el neto.
+   La respuesta trae `descuento`, `puntos_canjeados`, `puntos_generados` y `saldo_puntos`.
+3. Si la venta se elimina, el canje pasa a `CANCELADO` y se devuelven los puntos
+   (movimiento `DEVOLUCION_CANJE`) y el stock. No se puede cambiar el socio ni el importe de
+   una venta con beneficio (409 `VENTA_CON_BENEFICIO`).
+
+El `limite_por_socio` de cada beneficio cuenta los canjes de la app y del mostrador (sin los anulados).
 
 ### Pruebas
 

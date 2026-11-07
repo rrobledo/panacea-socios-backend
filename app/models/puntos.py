@@ -29,6 +29,7 @@ class TipoMovimiento:
     EXPIRACION = "EXPIRACION"
     AJUSTE = "AJUSTE"
     MIGRACION = "MIGRACION"
+    DEVOLUCION_CANJE = "DEVOLUCION_CANJE"  # puntos devueltos al anular una venta con beneficio de mostrador
 
 
 class EstadoCanje:
@@ -41,6 +42,7 @@ class EstadoCanje:
 class OrigenCanje:
     CANJE = "CANJE"
     MAQUINA = "MAQUINA"
+    MOSTRADOR = "MOSTRADOR"  # beneficio elegido por el personal al registrar la venta
 
 
 class ReglaPuntos(Base):

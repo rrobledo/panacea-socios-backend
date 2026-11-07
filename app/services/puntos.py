@@ -235,12 +235,61 @@ def beneficios_disponibles(db: Session) -> list[Beneficio]:
 
 
 def canjes_por_beneficio(db: Session, socio_id: int) -> dict[int, int]:
+    """Canjes que cuentan para `limite_por_socio`: desde la app y en el mostrador, sin anulados.
+    Los cupones de la Máquina de Recompensas no cuentan."""
     rows = db.execute(
         select(Canje.beneficio_id, func.count())
-        .where(Canje.socio_id == socio_id, Canje.origen == OrigenCanje.CANJE)
+        .where(
+            Canje.socio_id == socio_id,
+            Canje.origen.in_([OrigenCanje.CANJE, OrigenCanje.MOSTRADOR]),
+            Canje.estado != EstadoCanje.CANCELADO,
+        )
         .group_by(Canje.beneficio_id)
     ).all()
     return {beneficio_id: n for beneficio_id, n in rows}
+
+
+_MENSAJES_NO_USABLE = {
+    "PROGRAMA_INACTIVO": "El programa de puntos no está activo",
+    "SIN_STOCK": "El beneficio no tiene stock",
+    "BENEFICIO_NO_DISPONIBLE": "El beneficio no está disponible",
+    "LIMITE_ALCANZADO": "Alcanzaste el límite de canjes de este beneficio",
+    "SALDO_INSUFICIENTE": "Saldo de puntos insuficiente",
+}
+
+
+def motivo_no_usable(
+    beneficio: Beneficio, saldo: int, usados: dict[int, int], *, programa_activo: bool, dia: date
+) -> str | None:
+    """Código de por qué el socio no puede usar el beneficio, o None si puede."""
+    if not programa_activo:
+        return "PROGRAMA_INACTIVO"
+    if beneficio.stock is not None and beneficio.stock <= 0:
+        return "SIN_STOCK"
+    if not beneficio_disponible(beneficio, dia):
+        return "BENEFICIO_NO_DISPONIBLE"
+    if beneficio.limite_por_socio is not None and usados.get(beneficio.id, 0) >= beneficio.limite_por_socio:
+        return "LIMITE_ALCANZADO"
+    if (saldo or 0) < beneficio.costo_puntos:
+        return "SALDO_INSUFICIENTE"
+    return None
+
+
+def _bloquear_y_validar_canje(db: Session, socio_id: int, beneficio_id: int) -> tuple[Socio, Beneficio]:
+    """Bloquea socio y beneficio (en ese orden) y valida el canje. Lanza los errores de negocio."""
+    if not get_config(db).programa_activo:
+        raise error("PROGRAMA_INACTIVO", _MENSAJES_NO_USABLE["PROGRAMA_INACTIVO"])
+    socio = bloquear_socio(db, socio_id)
+    beneficio = db.execute(
+        select(Beneficio).where(Beneficio.id == beneficio_id).with_for_update()
+    ).scalar_one_or_none()
+    if beneficio is None:
+        raise error("BENEFICIO_NO_ENCONTRADO", "Beneficio no encontrado", status.HTTP_404_NOT_FOUND)
+    usados = canjes_por_beneficio(db, socio.id) if beneficio.limite_por_socio is not None else {}
+    motivo = motivo_no_usable(beneficio, socio.saldo_puntos, usados, programa_activo=True, dia=hoy_local())
+    if motivo:
+        raise error(motivo, _MENSAJES_NO_USABLE[motivo])
+    return socio, beneficio
 
 
 def _generar_codigo(db: Session) -> str:
@@ -251,7 +300,9 @@ def _generar_codigo(db: Session) -> str:
     raise RuntimeError("No se pudo generar un código de cupón único")
 
 
-def _emitir_cupon(db: Session, socio: Socio, beneficio: Beneficio, origen: str, costo: int) -> Canje:
+def _emitir_cupon(
+    db: Session, socio: Socio, beneficio: Beneficio, origen: str, costo: int, *, expira_en: datetime | None = None
+) -> Canje:
     canje = Canje(
         socio_id=socio.id,
         beneficio_id=beneficio.id,
@@ -262,7 +313,7 @@ def _emitir_cupon(db: Session, socio: Socio, beneficio: Beneficio, origen: str, 
         porcentaje_descuento=beneficio.porcentaje_descuento,
         tope_descuento=beneficio.tope_descuento,
         estado=EstadoCanje.EMITIDO,
-        expira_en=ahora_utc() + timedelta(days=beneficio.dias_validez_cupon),
+        expira_en=expira_en or ahora_utc() + timedelta(days=beneficio.dias_validez_cupon),
         creado_en=ahora_utc(),
     )
     db.add(canje)
@@ -273,34 +324,67 @@ def _emitir_cupon(db: Session, socio: Socio, beneficio: Beneficio, origen: str, 
 
 
 def canjear_beneficio(db: Session, socio_id: int, beneficio_id: int) -> Canje:
-    if not get_config(db).programa_activo:
-        raise error("PROGRAMA_INACTIVO", "El programa de puntos no está activo")
-
-    socio = bloquear_socio(db, socio_id)
-    beneficio = db.execute(
-        select(Beneficio).where(Beneficio.id == beneficio_id).with_for_update()
-    ).scalar_one_or_none()
-    if beneficio is None:
-        raise error("BENEFICIO_NO_ENCONTRADO", "Beneficio no encontrado", status.HTTP_404_NOT_FOUND)
-
-    dia = hoy_local()
-    if beneficio.stock is not None and beneficio.stock <= 0:
-        raise error("SIN_STOCK", "El beneficio no tiene stock")
-    if not beneficio_disponible(beneficio, dia):
-        raise error("BENEFICIO_NO_DISPONIBLE", "El beneficio no está disponible")
-    if beneficio.limite_por_socio is not None:
-        usados = canjes_por_beneficio(db, socio.id).get(beneficio.id, 0)
-        if usados >= beneficio.limite_por_socio:
-            raise error("LIMITE_ALCANZADO", "Alcanzaste el límite de canjes de este beneficio")
-    if socio.saldo_puntos < beneficio.costo_puntos:
-        raise error("SALDO_INSUFICIENTE", "Saldo de puntos insuficiente")
-
+    socio, beneficio = _bloquear_y_validar_canje(db, socio_id, beneficio_id)
     canje = _emitir_cupon(db, socio, beneficio, OrigenCanje.CANJE, beneficio.costo_puntos)
     registrar_movimiento(
         db, socio, TipoMovimiento.CANJE, -beneficio.costo_puntos,
         descripcion=f"Canje: {beneficio.nombre}", canje_id=canje.id,
     )
     return canje
+
+
+def canjear_en_venta(db: Session, socio_id: int, beneficio_id: int, monto: Decimal) -> tuple[Canje, Decimal]:
+    """Canje de mostrador: valida, descuenta los puntos y emite el canje (origen MOSTRADOR).
+
+    Devuelve el canje (todavía EMITIDO: el llamador lo marca USADO al asociarlo a la venta)
+    y el descuento sobre `monto`.
+    """
+    socio, beneficio = _bloquear_y_validar_canje(db, socio_id, beneficio_id)
+    canje = _emitir_cupon(
+        db, socio, beneficio, OrigenCanje.MOSTRADOR, beneficio.costo_puntos, expira_en=ahora_utc()
+    )
+    registrar_movimiento(
+        db, socio, TipoMovimiento.CANJE, -beneficio.costo_puntos,
+        descripcion=f"Canje en mostrador: {beneficio.nombre}", canje_id=canje.id,
+    )
+    return canje, calcular_descuento(canje, monto)
+
+
+def canje_mostrador_de_venta(db: Session, venta_id: int) -> Canje | None:
+    return db.execute(
+        select(Canje).where(Canje.venta_id == venta_id, Canje.origen == OrigenCanje.MOSTRADOR)
+    ).scalar_one_or_none()
+
+
+def devolver_canje_de_venta(db: Session, venta: RegistroVenta) -> int:
+    """Anula el canje de mostrador de una venta: devuelve puntos y stock. Idempotente.
+
+    Llamar ANTES de borrar la venta (canjes.venta_id es ON DELETE SET NULL).
+    Devuelve los puntos devueltos.
+    """
+    canje = canje_mostrador_de_venta(db, venta.id)
+    if canje is None or canje.estado == EstadoCanje.CANCELADO:
+        return 0
+    socio = bloquear_socio(db, canje.socio_id)
+    ya_devuelto = db.execute(
+        select(MovimientoPuntos.id).where(
+            MovimientoPuntos.canje_id == canje.id, MovimientoPuntos.tipo == TipoMovimiento.DEVOLUCION_CANJE
+        )
+    ).first()
+    canje.estado = EstadoCanje.CANCELADO
+    if ya_devuelto:
+        db.flush()
+        return 0
+    beneficio = db.execute(
+        select(Beneficio).where(Beneficio.id == canje.beneficio_id).with_for_update()
+    ).scalar_one_or_none()
+    if beneficio is not None and beneficio.stock is not None:
+        beneficio.stock += 1
+    registrar_movimiento(
+        db, socio, TipoMovimiento.DEVOLUCION_CANJE, canje.costo_puntos,
+        descripcion=f"Devolución por anulación de compra #{venta.id}: {canje.titulo}", canje_id=canje.id,
+    )
+    return canje.costo_puntos
 
 
 def estado_maquina(db: Session) -> dict:
@@ -341,7 +425,7 @@ def estado_cupon(canje: Canje, ahora: datetime | None = None) -> str:
     return canje.estado
 
 
-def calcular_descuento(canje: Canje, monto: Decimal) -> Decimal:
+def calcular_descuento(canje: Canje | Beneficio, monto: Decimal) -> Decimal:
     descuento = Decimal(monto) * canje.porcentaje_descuento / Decimal(100)
     if canje.tope_descuento is not None:
         descuento = min(descuento, canje.tope_descuento)

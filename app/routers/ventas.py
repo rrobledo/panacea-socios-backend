@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.socio import Socio
 from app.models.venta import DetalleRegistroVenta, RegistroVenta
 from app.models.puntos import EstadoCanje
+from app.schemas.puntos import BeneficiosDisponiblesResponse, BeneficioUsableResponse
 from app.schemas.venta import ComprasPorCategoriaResponse, ComprasSemanalResponse, VentaCreate, VentaCreateResponse, VentaDetailResponse, VentaResponse, VentaUpdate
 from app.services import puntos as puntos_svc
 
@@ -48,15 +49,23 @@ def create_venta(
 
     - `cupon_codigo` (opcional, uno solo): aplica el descuento del cupón; `importe` se
       interpreta como monto antes del descuento y se registra el neto. 409 `CUPON_INVALIDO`.
-    - Si la venta tiene socio, genera los puntos con la regla vigente a la fecha de la venta.
+    - `beneficio_id` (opcional, excluyente con `cupon_codigo`, requiere `socio_id`): beneficio
+      elegido en el mostrador. En la misma operación descuenta sus puntos, registra el canje
+      como usado en esta venta y aplica el descuento (`importe` = monto antes del descuento).
+      409 `SALDO_INSUFICIENTE`, `LIMITE_ALCANZADO`, `SIN_STOCK`, `BENEFICIO_NO_DISPONIBLE`,
+      `PROGRAMA_INACTIVO`; 404 `BENEFICIO_NO_ENCONTRADO`. Si falla, no se registra la venta.
+    - Si la venta tiene socio, genera los puntos sobre el neto con la regla vigente a la fecha.
     """
     detalles_data = body.detalles
-    venta_data = body.model_dump(exclude={"detalles", "cupon_codigo"})
+    venta_data = body.model_dump(exclude={"detalles", "cupon_codigo", "beneficio_id"})
     venta_data["fecha"] = puntos_svc.a_utc_naive(venta_data["fecha"])
 
     canje, descuento = None, Decimal("0")
     if body.cupon_codigo:
         canje, descuento = puntos_svc.aplicar_cupon(db, body.cupon_codigo, body.socio_id, body.importe)
+    elif body.beneficio_id is not None:
+        canje, descuento = puntos_svc.canjear_en_venta(db, body.socio_id, body.beneficio_id, body.importe)
+    if canje is not None:
         venta_data["importe"] = body.importe - descuento
 
     venta = RegistroVenta(**venta_data)
@@ -80,7 +89,56 @@ def create_venta(
     resp = VentaCreateResponse.model_validate(venta)
     resp.descuento = descuento
     resp.puntos_generados = puntos
+    if body.beneficio_id is not None and canje is not None:
+        resp.puntos_canjeados = canje.costo_puntos
+    if venta.socio_id is not None:
+        resp.saldo_puntos = db.get(Socio, venta.socio_id).saldo_puntos
     return resp
+
+
+@router.get(
+    "/beneficios-disponibles",
+    response_model=BeneficiosDisponiblesResponse,
+    summary="Beneficios que un socio puede usar en una venta",
+)
+def beneficios_disponibles(
+    socio_id: int,
+    importe: Decimal | None = None,
+    db: Session = Depends(get_db),
+    _: Socio = passport.authenticate("jwt"),
+):
+    """Beneficios vigentes para el selector del mostrador, ordenados por costo en puntos.
+
+    Cada uno indica si el socio puede usarlo (`usable`) y, si no, el `motivo`
+    (`SALDO_INSUFICIENTE`, `LIMITE_ALCANZADO`, `PROGRAMA_INACTIVO`, …). Con `importe`
+    (monto antes del descuento) informa además el `descuento_estimado`. 404 `SOCIO_NO_ENCONTRADO`.
+    """
+    socio = db.get(Socio, socio_id)
+    if socio is None:
+        raise puntos_svc.error("SOCIO_NO_ENCONTRADO", "Socio no encontrado", status.HTTP_404_NOT_FOUND)
+    activo = puntos_svc.get_config(db).programa_activo
+    usados = puntos_svc.canjes_por_beneficio(db, socio.id)
+    saldo = socio.saldo_puntos or 0
+    dia = puntos_svc.hoy_local()
+    beneficios = []
+    for b in puntos_svc.beneficios_disponibles(db):
+        motivo = puntos_svc.motivo_no_usable(b, saldo, usados, programa_activo=activo, dia=dia)
+        descuento = None
+        if importe is not None and importe > 0:
+            descuento = float(puntos_svc.calcular_descuento(b, importe))
+        beneficios.append(BeneficioUsableResponse(
+            id=b.id,
+            nombre=b.nombre,
+            descripcion=b.descripcion,
+            imagen_url=b.imagen_url,
+            costo_puntos=b.costo_puntos,
+            porcentaje_descuento=float(b.porcentaje_descuento),
+            tope_descuento=float(b.tope_descuento) if b.tope_descuento is not None else None,
+            usable=motivo is None,
+            motivo=motivo,
+            descuento_estimado=descuento,
+        ))
+    return BeneficiosDisponiblesResponse(socio_id=socio.id, saldo_puntos=saldo, beneficios=beneficios)
 
 
 @router.get("/estadisticas/compras_semanales", response_model=list[ComprasSemanalResponse], summary="Compras semanales")
@@ -192,9 +250,22 @@ def update_venta(
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
-    """Actualiza los campos de cabecera de una venta. Requiere autenticación."""
+    """Actualiza los campos de cabecera de una venta. Requiere autenticación.
+
+    Si la venta usó un beneficio en el mostrador, no se puede cambiar `socio_id` ni `importe`
+    (409 `VENTA_CON_BENEFICIO`): para corregirla, eliminarla (devuelve los puntos) y registrarla de nuevo.
+    """
     venta = _get_or_404(venta_id, db)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    cambios = body.model_dump(exclude_unset=True)
+    if (
+        ("socio_id" in cambios and cambios["socio_id"] != venta.socio_id)
+        or ("importe" in cambios and cambios["importe"] != venta.importe)
+    ) and puntos_svc.canje_mostrador_de_venta(db, venta.id) is not None:
+        raise puntos_svc.error(
+            "VENTA_CON_BENEFICIO",
+            "La venta usó un beneficio: no se puede cambiar el socio ni el importe. Eliminala y registrala de nuevo.",
+        )
+    for field, value in cambios.items():
         setattr(venta, field, value)
     db.commit()
     db.refresh(venta)
@@ -207,8 +278,13 @@ def delete_venta(
     db: Session = Depends(get_db),
     _: Socio = passport.authenticate("jwt"),
 ):
-    """Elimina una venta y todos sus detalles (cascade). Revierte los puntos que generó. Requiere autenticación."""
+    """Elimina una venta y todos sus detalles (cascade). Requiere autenticación.
+
+    Revierte los puntos que generó y, si usó un beneficio en el mostrador, anula el canje y
+    le devuelve al socio los puntos y al beneficio el stock.
+    """
     venta = _get_or_404(venta_id, db)
+    puntos_svc.devolver_canje_de_venta(db, venta)  # antes del delete: canjes.venta_id es ON DELETE SET NULL
     puntos_svc.reversar_venta(db, venta)
     db.delete(venta)
     db.commit()

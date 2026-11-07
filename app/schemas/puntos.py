@@ -93,6 +93,28 @@ class ValidarCuponResponse(BaseModel):
     motivo: str | None = None
 
 
+# ── Mostrador: beneficios usables en una venta ─────────────────────────────────
+
+class BeneficioUsableResponse(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str | None
+    imagen_url: str | None
+    costo_puntos: int
+    porcentaje_descuento: float
+    tope_descuento: float | None
+    usable: bool
+    # SALDO_INSUFICIENTE | LIMITE_ALCANZADO | PROGRAMA_INACTIVO | SIN_STOCK | BENEFICIO_NO_DISPONIBLE
+    motivo: str | None = None
+    descuento_estimado: float | None = None  # solo si se informó `importe`
+
+
+class BeneficiosDisponiblesResponse(BaseModel):
+    socio_id: int
+    saldo_puntos: int
+    beneficios: list[BeneficioUsableResponse]
+
+
 # ── Admin ──────────────────────────────────────────────────────────────────────
 
 class BeneficioBase(BaseModel):

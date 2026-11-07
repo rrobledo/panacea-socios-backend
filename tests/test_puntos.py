@@ -365,3 +365,169 @@ def test_maquina_descuenta_costo_y_emite_cupon(client, admin, crear_socio):
     assert r.json()["saldo"] == 50 and r.json()["coupon"]["title"] == "Premio"
     r = client.post("/recompensas/maquina/jugar", headers=auth(socio))
     assert r.json()["detail"]["code"] == "SALDO_INSUFICIENTE"
+
+
+# ── Beneficio en el mostrador ──────────────────────────────────────────────────
+
+def beneficio_10(client, admin, **extra):
+    """300 puntos, 10% sin tope (el escenario de la spec)."""
+    return crear_beneficio(client, admin, nombre="10% off", costo_puntos=300, porcentaje_descuento=10,
+                           tope_descuento=None, **extra)
+
+
+def disponibles(client, operador, socio_id, **params):
+    return client.get("/ventas/beneficios-disponibles", params={"socio_id": socio_id, **params}, headers=auth(operador))
+
+
+def test_listado_de_beneficios_usables(client, admin, crear_socio):
+    barato = beneficio_10(client, admin)
+    caro = crear_beneficio(client, admin, nombre="Caro", costo_puntos=900, porcentaje_descuento=20, tope_descuento=1500)
+    crear_beneficio(client, admin, nombre="Inactivo", activo=False)
+    socio = crear_socio(saldo=500)
+
+    r = disponibles(client, admin, socio.id, importe=10000)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["socio_id"] == socio.id and body["saldo_puntos"] == 500
+    por_id = {b["id"]: b for b in body["beneficios"]}
+    assert set(por_id) == {barato["id"], caro["id"]}
+    assert [b["id"] for b in body["beneficios"]] == [barato["id"], caro["id"]]  # por costo
+    assert por_id[barato["id"]]["usable"] is True and por_id[barato["id"]]["motivo"] is None
+    assert por_id[barato["id"]]["descuento_estimado"] == 1000.0
+    assert por_id[caro["id"]]["usable"] is False and por_id[caro["id"]]["motivo"] == "SALDO_INSUFICIENTE"
+    assert por_id[caro["id"]]["descuento_estimado"] == 1500.0  # tope
+
+    sin_importe = disponibles(client, admin, socio.id).json()["beneficios"]
+    assert all(b["descuento_estimado"] is None for b in sin_importe)
+
+    r = disponibles(client, admin, 99999)
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "SOCIO_NO_ENCONTRADO"
+
+
+def test_listado_limite_y_programa_inactivo(client, admin, crear_socio):
+    b = beneficio_10(client, admin, limite_por_socio=1)
+    socio = crear_socio(saldo=5000)
+    assert registrar_venta(client, admin, socio, 1000, beneficio_id=b["id"]).status_code == 201
+    item = disponibles(client, admin, socio.id).json()["beneficios"][0]
+    assert item["usable"] is False and item["motivo"] == "LIMITE_ALCANZADO"
+
+    r = client.put("/admin/configuracion", json={"meses_expiracion_puntos": 12, "costo_juego_maquina": 100, "programa_activo": False}, headers=auth(admin))
+    assert r.status_code == 200, r.text
+    otro = crear_socio(saldo=5000)
+    item = disponibles(client, admin, otro.id).json()["beneficios"][0]
+    assert item["usable"] is False and item["motivo"] == "PROGRAMA_INACTIVO"
+
+
+def test_venta_con_beneficio(client, admin, crear_socio, db):
+    crear_regla(client, admin, 100)
+    b = beneficio_10(client, admin, stock=5)
+    socio = crear_socio(saldo=500)
+
+    r = registrar_venta(client, admin, socio, 10000, beneficio_id=b["id"])
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert Decimal(body["importe"]) == Decimal("9000") and Decimal(body["descuento"]) == Decimal("1000")
+    assert body["puntos_canjeados"] == 300 and body["puntos_generados"] == 90 and body["saldo_puntos"] == 290
+    assert saldo(client, socio) == 290
+
+    canje = db.execute(select(Canje).where(Canje.venta_id == body["id"])).scalar_one()
+    assert (canje.origen, canje.estado, canje.monto_descontado, canje.costo_puntos) == ("MOSTRADOR", "USADO", Decimal("1000.00"), 300)
+    assert canje.usado_en is not None
+    stock = client.get("/admin/beneficios", headers=auth(admin)).json()[0]["stock"]
+    assert stock == 4
+
+
+def test_venta_sin_beneficio_informa_cero_canjeados(client, admin, crear_socio):
+    socio = crear_socio(saldo=50)
+    body = registrar_venta(client, admin, socio, 1000).json()
+    assert body["puntos_canjeados"] == 0 and body["saldo_puntos"] == 50
+
+
+def test_venta_con_beneficio_errores_no_registran_nada(client, admin, crear_socio, db):
+    b = beneficio_10(client, admin)
+    pobre = crear_socio(saldo=100)
+    r = registrar_venta(client, admin, pobre, 10000, beneficio_id=b["id"])
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "SALDO_INSUFICIENTE"
+
+    r = registrar_venta(client, admin, pobre, 10000, beneficio_id=99999)
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "BENEFICIO_NO_ENCONTRADO"
+
+    sin_socio = {"fecha": svc.ahora_utc().isoformat() + "Z", "importe": 1000, "beneficio_id": b["id"]}
+    assert client.post("/ventas/", json=sin_socio, headers=auth(admin)).status_code == 422
+
+    r = registrar_venta(client, admin, pobre, 1000, beneficio_id=b["id"], cupon_codigo="ABCDEFGH")
+    assert r.status_code == 422
+
+    assert db.execute(text("SELECT count(*) FROM registro_ventas")).scalar() == 0
+    assert db.execute(text("SELECT count(*) FROM canjes")).scalar() == 0
+    assert saldo(client, pobre) == 100
+
+
+def test_limite_compartido_entre_app_y_mostrador(client, admin, crear_socio):
+    b = beneficio_10(client, admin, limite_por_socio=1)
+    socio = crear_socio(saldo=5000)
+    venta = registrar_venta(client, admin, socio, 1000, beneficio_id=b["id"]).json()
+
+    r = client.post(f"/recompensas/beneficios/{b['id']}/canjear", headers=auth(socio))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "LIMITE_ALCANZADO"
+    assert client.get("/recompensas/beneficios", headers=auth(socio)).json()[0]["canjeable"] is False
+
+    # Anular la venta libera el límite
+    assert client.delete(f"/ventas/{venta['id']}", headers=auth(admin)).status_code == 204
+    assert registrar_venta(client, admin, socio, 1000, beneficio_id=b["id"]).status_code == 201
+
+
+def test_eliminar_venta_con_beneficio_devuelve_puntos_y_stock(client, admin, crear_socio, db):
+    crear_regla(client, admin, 100)
+    b = beneficio_10(client, admin, stock=5)
+    socio = crear_socio(saldo=500)
+    venta = registrar_venta(client, admin, socio, 10000, beneficio_id=b["id"]).json()
+    canje_id = db.execute(select(Canje.id).where(Canje.venta_id == venta["id"])).scalar_one()
+
+    assert client.delete(f"/ventas/{venta['id']}", headers=auth(admin)).status_code == 204
+    assert saldo(client, socio) == 500
+    db.expire_all()
+    canje = db.get(Canje, canje_id)
+    assert canje.estado == "CANCELADO"
+    assert client.get("/admin/beneficios", headers=auth(admin)).json()[0]["stock"] == 5
+    tipos = [m["tipo"] for m in client.get("/recompensas/actividad", headers=auth(socio)).json()]
+    assert "DEVOLUCION_CANJE" in tipos and "REVERSO_COMPRA" in tipos
+
+    # Idempotente: una segunda llamada no devuelve de nuevo
+    assert svc.devolver_canje_de_venta(db, RegistroVenta(id=venta["id"])) == 0
+    devoluciones = db.execute(
+        select(MovimientoPuntos).where(MovimientoPuntos.canje_id == canje_id, MovimientoPuntos.tipo == "DEVOLUCION_CANJE")
+    ).scalars().all()
+    assert len(devoluciones) == 1
+
+
+def test_editar_venta_con_beneficio(client, admin, crear_socio):
+    b = beneficio_10(client, admin)
+    socio = crear_socio(saldo=500)
+    otro = crear_socio()
+    venta = registrar_venta(client, admin, socio, 10000, beneficio_id=b["id"]).json()
+
+    for cambio in ({"socio_id": otro.id}, {"importe": "5000.00"}):
+        r = client.put(f"/ventas/{venta['id']}", json=cambio, headers=auth(admin))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "VENTA_CON_BENEFICIO"
+
+    r = client.put(f"/ventas/{venta['id']}", json={"lugar": "Villa Carlos Paz", "socio_id": socio.id}, headers=auth(admin))
+    assert r.status_code == 200 and r.json()["lugar"] == "Villa Carlos Paz"
+
+
+def test_ventas_con_beneficio_concurrentes(client, admin, crear_socio):
+    b = beneficio_10(client, admin)
+    socio = crear_socio(saldo=400)  # alcanza para un solo canje de 300
+    resultados = []
+    barrera = threading.Barrier(2)
+
+    def vender():
+        barrera.wait()
+        r = registrar_venta(client, admin, socio, 1000, beneficio_id=b["id"])
+        resultados.append(r.status_code if r.status_code == 201 else r.json()["detail"]["code"])
+
+    hilos = [threading.Thread(target=vender) for _ in range(2)]
+    [h.start() for h in hilos]
+    [h.join() for h in hilos]
+    assert sorted(map(str, resultados)) == ["201", "SALDO_INSUFICIENTE"]
+    assert saldo(client, socio) == 100

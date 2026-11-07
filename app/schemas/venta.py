@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class DetalleCreate(BaseModel):
@@ -32,6 +32,18 @@ class VentaCreate(VentaBase):
     # Un solo cupón por compra. Si viene, `importe` es el monto ANTES del descuento
     # y se registra el neto (importe - descuento).
     cupon_codigo: str | None = Field(None, max_length=20, examples=["K7M3PQ9X"])
+    # Beneficio elegido en el mostrador: descuenta sus puntos y aplica el descuento en la
+    # misma operación. Requiere socio y excluye cupon_codigo (un beneficio por compra).
+    beneficio_id: int | None = Field(None, examples=[3])
+
+    @model_validator(mode="after")
+    def _un_beneficio_por_compra(self):
+        if self.beneficio_id is not None:
+            if self.socio_id is None:
+                raise ValueError("beneficio_id requiere socio_id")
+            if self.cupon_codigo:
+                raise ValueError("Solo se puede usar un beneficio por compra: enviar beneficio_id o cupon_codigo, no ambos")
+        return self
 
 
 class VentaUpdate(BaseModel):
@@ -51,6 +63,8 @@ class VentaResponse(VentaBase):
 class VentaCreateResponse(VentaResponse):
     descuento: Decimal = Decimal("0")
     puntos_generados: int = 0
+    puntos_canjeados: int = 0
+    saldo_puntos: int | None = None  # saldo final del socio (None si la venta no tiene socio)
 
 
 class VentaDetailResponse(BaseModel):
