@@ -340,7 +340,9 @@ Endpoints: `/recompensas/*` (socio autenticado), `/canjes/{codigo}` (validación
   vigente, las compras no generan puntos.
 - Job diario (Vercel Cron, definido en `vercel.json`): `GET /jobs/diario`. Requiere la
   variable `CRON_SECRET` (Vercel la envía como `Authorization: Bearer …`).
-- Compras históricas: `python -m scripts.migrar_puntos_historicos --help` (simula por defecto).
+- Puntos por ventas históricas: `scripts/ajustar_puntos_por_ventas_datagrip.sql` (1000 pesos = 1 punto
+  sobre el total de ventas de cada socio; solo agrega lo que falta). Se ejecuta completo desde
+  DataGrip y termina en `ROLLBACK` (simulación): cambiar la última línea por `COMMIT` para aplicar.
 
 ### Beneficio en el mostrador
 
